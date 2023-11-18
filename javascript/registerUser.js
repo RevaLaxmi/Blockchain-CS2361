@@ -11,9 +11,14 @@ const FabricCAServices = require('fabric-ca-client');
 const fs = require('fs');
 const path = require('path');
 
-let userID;
+let ctx, name, age, contactInfo, gender, illness, check;
 process.argv.forEach(function (val, index, array) {
-    userID = array[2];
+    name = array[2];
+    age = array[3];
+    contactInfo = array[4];
+    gender = array[5];
+    illness = array[6];
+    check= array[7];
 });
 
 async function main() {
@@ -32,9 +37,9 @@ async function main() {
         console.log(`Wallet path: ${walletPath}`);
 
         // Check to see if we've already enrolled the user.
-        const userIdentity = await wallet.get(userID);
+        const userIdentity = await wallet.get(name);
         if (userIdentity) {
-            console.log(`An identity for the user ${userID} already exists in the wallet`);
+            console.log(`An identity for the user ${name} already exists in the wallet`);
             return;
         }
 
@@ -53,11 +58,11 @@ async function main() {
         // Register the user, enroll the user, and import the new identity into the wallet.
         const secret = await ca.register({
             affiliation: 'org1.department1',
-            enrollmentID: userID,
+            enrollmentID: name,
             role: 'client'
         }, adminUser);
         const enrollment = await ca.enroll({
-            enrollmentID: userID,
+            enrollmentID: name,
             enrollmentSecret: secret
         });
         const x509Identity = {
@@ -68,11 +73,11 @@ async function main() {
             mspId: 'Org1MSP',
             type: 'X.509',
         };
-        await wallet.put(userID, x509Identity);
-        console.log(`Successfully registered and enrolled admin user ${userID} and imported it into the wallet`);
+        await wallet.put(name, x509Identity);
+        console.log(`Successfully registered and enrolled admin user ${name} and imported it into the wallet`);
 
     } catch (error) {
-        console.error(`Failed to register user ${userID}: ${error}`);
+        console.error(`Failed to register user ${name}: ${error}`);
         process.exit(1);
     }
 }

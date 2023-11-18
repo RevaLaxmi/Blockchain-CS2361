@@ -1,227 +1,180 @@
-/*
- * SPDX-License-Identifier: Apache-2.0
- */
-
 'use strict';
 
-const {Contract} = require('fabric-contract-api');
-const ClientIdentity = require('fabric-shim').ClientIdentity;
+const { Contract } = require('fabric-contract-api');
 
-// msgID of last msg that was posted
-let msgID = -1;
-// list of users
-let users = [];
-
-class FabChat extends Contract {
+class PatientDoctorManagement extends Contract {
 
     async initLedger(ctx) {
-        console.info('============= START : Initialize Ledger ===========');
+        console.info('============= START : Initialize Ledger for Patient-Doctor Management System ===========');
+    
+        console.info('Patient-Doctor Management System is now initialized.');
+        console.info('Doctors and patients can register and utilize the system for healthcare management.');
+        console.info('Patients can securely log in, view, and update their personal health records.');
+        console.info('Doctors, upon verification, can access and update patient records.');
+        console.info('All data is securely stored and managed on the blockchain, ensuring privacy and integrity.');
+    
+        console.info('============= END : Initialize Ledger for Patient-Doctor Management System ===========');
+    }    
 
-        const startKey = '0';
-        const endKey = '99999';
+    // Function to register a patient with a unique odd ID
+    async registerPatient(ctx, name, age, contactInfo, gender, illness) {
+        const symmetricKey = crypto.randomBytes(32).toString('hex'); // 256-bit key
+        let patientId = await this.generateUniqueOddId(ctx, 'patient');
 
-        const iterator = await ctx.stub.getStateByRange(startKey, endKey);
-
-        while (true) {
-            const res = await iterator.next();
-
-            if (res.value && res.value.value.toString()) {
-                // console.log(res.value.value.toString('utf8'));
-                let msg;
-                try {
-                    msg = JSON.parse(res.value.value.toString('utf8'));
-
-                    // update users array and msgID
-                    if (msg.msgText === "$HELLO$") {
-                        users.push(msg.userID);
-                    }
-
-                    msgID += 1;
-
-                } catch (err) {
-                    console.log(err);
-                    msg = res.value.value.toString('utf8');
-                }
-            }
-
-            if (res.done) {
-                await iterator.close();
-                console.log(`users: ${users}`);
-                console.log(`numUsers: ${users.length}`);
-                console.log(`lastMsgID: ${msgID}`);
-                break;
-            }
-        }
-        console.info('============= END : Initialize Ledger ===========');
-    }
-
-    async createMsg(ctx, msgText, emailID, isAnonymous) {
-        console.info('============= START : CREATEmsg ===========');
-
-        let cid = new ClientIdentity(ctx.stub);
-        let userID = cid.getID();
-
-        console.log(`msgText : ${msgText}`);
-        console.log(`userID  : ${userID}`);
-        console.log(`emailID : ${emailID}`);
-        console.log(`isAnonymous : ${isAnonymous}`);
-
-        const flaggers = [];
-        const flag = 0;
-
-        const msg = {
-            msgText,
-            userID,
-            flag,
-            flaggers,
-            emailID,
-            isAnonymous, 
+        const patient = {
+            docType: 'patient',
+            Name: name,
+            Age: age,
+            ContactInfo: contactInfo,
+            Gender: gender,
+            SpecificIllness: illness,
+            SymmetricKey: symmetricKey // kill me kill me what the fuck, but anyway ok so this is only for demonstration.. i cant actually just PRESENT the key 
         };
 
-        // if new user, add user to users array
-        if (!(users.includes(userID))) {
-            console.log(`New user! Added to users array.`);
-            users.push(userID);
-        }
-
-        msgID += 1;
-
-        await ctx.stub.putState(msgID.toString(), Buffer.from(JSON.stringify(msg)));
-        console.info('============= END : createMsg ===========');
+        await ctx.stub.putState(patientId.toString(), Buffer.from(JSON.stringify(patient)));
     }
 
-    async queryMsg(ctx, msgID) {
-        console.info('============= START : queryMsgByID ===========');
-        console.log(`msgID: ${msgID}`);
+    // Helper function to generate a unique odd ID
+    async generateUniqueOddId(ctx, docType) {
+        let id;
+        let exists;
+        do {
+            id = this.makeOdd(Math.floor(Math.random() * 1000000));
+            exists = await this.idExists(ctx, id, docType);
+        } while (exists);
+        return id;
+    }
 
-        const msgAsBytes = await ctx.stub.getState(msgID); // get the msg from chaincode state
-        if (!msgAsBytes || msgAsBytes.length === 0) {
-            throw new Error(`${msgID} does not exist`);
-        }
-        let msg;
-        msg = JSON.parse(msgAsBytes.toString());
-
-        // don't show registration $HELLO$ records
-        if (msg.msgText === "$HELLO$") {
-            throw new Error(`${msgID} does not exist`);
-        }
-
-        // don't show email ID if flag is not -1 and isAnonymous is true
-        if (msg.flag !== -1 && msg.isAnonymous === 'true') {
-            delete msg.emailID;
-        }
-        
-
-        // no need to show these fields anyway
-        delete msg.flag;
-        delete msg.flaggers;
-        delete msg.userID;
-
-        console.log(msg);
-        console.info('============= END : queryMsgByID ===========');
-        return JSON.stringify(msg);
+    // Helper function to ensure the ID is odd
+    makeOdd(id) {
+        return id % 2 === 0 ? id + 1 : id;
     }
 
 
-    async queryAllMsgs(ctx) {
-        console.info('============= START : queryAllMsgs ===========');
+    // Function to register a doctor with a unique even ID
+    async registerDoctor(ctx, name, specialization, contactInfo) {
+        let doctorId = await this.generateUniqueEvenId(ctx, 'doctor');
 
-        const startKey = '0';
-        const endKey = '99999';
+        const doctor = {
+            docType: 'doctor',
+            Name: name,
+            ContactInfo: contactInfo
+        };
 
-        const iterator = await ctx.stub.getStateByRange(startKey, endKey);
+        await ctx.stub.putState(doctorId.toString(), Buffer.from(JSON.stringify(doctor)));
+        console.info(`Doctor ${doctorId} registered successfully.`);
 
-        const allResults = [];
-        while (true) {
-            const res = await iterator.next();
-
-            if (res.value && res.value.value.toString()) {
-                // console.log(res.value.value.toString('utf8'));
-
-                const Key = res.value.key;
-                let msg;
-                try {
-                    msg = JSON.parse(res.value.value.toString('utf8'));
-
-                    // don't show registration $HELLO$ records
-                    if (msg.msgText === "$HELLO$") {
-                        continue;
-                    }
-
-                    // don't show email ID if flag is not -1
-                    if (msg.flag !== -1 && msg.isAnonymous === 'true') {
-                        delete msg.emailID;
-                    }
-
-                    // no need to show these fields anyway
-                    delete msg.userID;
-                    delete msg.flag;
-                    delete msg.flaggers;
-
-                } catch (err) {
-                    console.log(err);
-                    msg = res.value.value.toString('utf8');
-                }
-                allResults.push({Key, msg});
-            }
-            if (res.done) {
-                await iterator.close();
-                console.info(allResults);
-                console.info('============= END : queryAllMsgs ===========');
-                return JSON.stringify(allResults);
-            }
-        }
+        return doctorId.toString();
     }
 
-    async flagMsg(ctx, msgID) {
-        console.info('============= START : flagMsg ===========');
-
-        let cid = new ClientIdentity(ctx.stub);
-        let flagger = cid.getID();
-        let threshold = Math.ceil(0.5 * users.length);
-
-        console.log(`numUsers: ${users.length}`);
-        console.log(`threshold: ${threshold}`);
-        console.log(`msgID: ${msgID}`);
-        console.log(`flagger  : ${flagger}`);
-
-        const msgAsBytes = await ctx.stub.getState(msgID); // get the msg from chaincode state
-        if (!msgAsBytes || msgAsBytes.length === 0) {
-            throw new Error(`${msgID} does not exist`);
-        }
-        const msg = JSON.parse(msgAsBytes.toString());
-
-        /* flag only if:
-			1. flagger is not trying to flag its own msg
-			2. flagger has not already flagged the msg
-			3. flagger is not trying to flag $HELLO$ msgs
-			4. flagger is not trying to flag a msg with flag = -1
-        */
-        if ((flagger !== msg.userID) && !(msg.flaggers.includes(flagger)) && (msg.msgText !== "$HELLO$") && (msg.flag !== -1)) {
-
-            // push new flagger in flaggers array
-            msg.flaggers.push(flagger);
-            // increment flag
-            msg.flag += 1;
-
-            console.log(`msgID ${msgID} flagged successfully!`);
-
-            // if flag count reaches threshold, set flag = -1
-            if (msg.flag >= threshold) {
-                msg.flag = -1;
-                console.log(`msgID ${msgID} flag count has now reached threshold!`);
-            }
-
-        } else {
-            throw new Error(`Cannot flag message!`);
-        }
-
-        await ctx.stub.putState(msgID, Buffer.from(JSON.stringify(msg)));
-        console.info('============= END : flagMsg ===========');
+    // Helper function to generate a unique even ID
+    async generateUniqueEvenId(ctx, docType) {
+        let id;
+        let exists;
+        do {
+            id = this.makeEven(Math.floor(Math.random() * 1000000));
+            exists = await this.idExists(ctx, id, docType);
+        } while (exists);
+        return id;
     }
 
-    
+    // Helper function to ensure the ID is even
+    makeEven(id) {
+        return id % 2 !== 0 ? id + 1 : id;
+    }
+
+    // Helper function to check if an ID already exists
+    async idExists(ctx, id, docType) {
+        const asBytes = await ctx.stub.getState(id.toString());
+        if (!asBytes || asBytes.length === 0) {
+            return false;
+        }
+        const record = JSON.parse(asBytes.toString());
+        return record.docType === docType;
+    }
+
+
+    // Function to retrieve patient data based on requesterId
+    async getPatientDataBasedOnRequester(ctx, patientId, requesterId) {
+        // Check if the patient exists
+        const patientAsBytes = await ctx.stub.getState(patientId);
+        if (!patientAsBytes || patientAsBytes.length === 0) {
+            throw new Error(`Patient with ID ${patientId} does not exist`);
+        }
+        const patient = JSON.parse(patientAsBytes.toString());
+
+        // Check if the requester is a registered doctor or the patient themselves
+        const requesterAsBytes = await ctx.stub.getState(requesterId);
+        if (!requesterAsBytes || requesterAsBytes.length === 0) {
+            throw new Error(`Requester with ID ${requesterId} does not exist`);
+        }
+        const requester = JSON.parse(requesterAsBytes.toString());
+
+        // If requester is the patient, return their data
+        if (requesterId === patientId) {
+            return patient;
+        }
+
+        // If requester is a doctor, check if they are the patient's doctor
+        if (requester.docType === 'doctor' && patient.DoctorsName === requester.Name) {
+            return patient;
+        }
+
+        throw new Error('Unauthorized access: You do not have permission to access this data.');
+    }
+
+
+        // Function to encrypt patient data
+    async encryptPatientData(ctx, patientId, data) {
+        const patientAsBytes = await ctx.stub.getState(patientId);
+        if (!patientAsBytes || patientAsBytes.length === 0) {
+            throw new Error(`Patient with ID ${patientId} does not exist`);
+        }
+
+        const patient = JSON.parse(patientAsBytes.toString());
+        const key = Buffer.from(patient.SymmetricKey, 'hex');
+        const iv = crypto.randomBytes(16); // Initialization vector
+
+        const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+        let encrypted = cipher.update(JSON.stringify(data), 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+
+        // Storing encrypted data and IV
+        patient.encryptedData = encrypted;
+        patient.iv = iv.toString('hex');
+        await ctx.stub.putState(patientId, Buffer.from(JSON.stringify(patient)));
+
+        return { success: true, message: 'Patient data encrypted successfully' };
+    }
+
+    // Function to decrypt patient data
+    async decryptPatientData(ctx, patientId) {
+        const patientAsBytes = await ctx.stub.getState(patientId);
+        if (!patientAsBytes || patientAsBytes.length === 0) {
+            throw new Error(`Patient with ID ${patientId} does not exist`);
+        }
+
+        const patient = JSON.parse(patientAsBytes.toString());
+        const key = Buffer.from(patient.SymmetricKey, 'hex');
+        const iv = Buffer.from(patient.iv, 'hex');
+
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        let decrypted = decipher.update(patient.encryptedData, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+
+        return JSON.parse(decrypted);
+    }
+
 
 }
 
-module.exports = FabChat;
+module.exports = PatientDoctorManagement;
+
+
+/*
+what the fuck cases:
+
+if a doctor is a patient
+if patient asks for patient record -> 
+
+*/

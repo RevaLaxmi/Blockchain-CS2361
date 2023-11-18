@@ -10,11 +10,11 @@ const { Gateway, Wallets } = require('fabric-network');
 const path = require('path');
 const fs = require('fs');
 
-let msgID;
-let userID;
+let requesterId;
+let patientId;
 process.argv.forEach(function (val, index, array) {
-    msgID = array[2];
-    userID = array[3];
+    requesterId = array[2];
+    patientId = array[3];
 });
 
 async function main() {
