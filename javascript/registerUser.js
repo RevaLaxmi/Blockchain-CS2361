@@ -1,9 +1,3 @@
-/*
- * Copyright IBM Corp. All Rights Reserved.
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 'use strict';
 
 const { Wallets } = require('fabric-network');
@@ -11,39 +5,36 @@ const FabricCAServices = require('fabric-ca-client');
 const fs = require('fs');
 const path = require('path');
 
-let ctx, name, age, contactInfo, gender, illness, check;
+let username;
 process.argv.forEach(function (val, index, array) {
-    name = array[2];
-    age = array[3];
-    contactInfo = array[4];
-    gender = array[5];
-    illness = array[6];
-    check= array[7];
+    if (index === 2) {
+        username = val;
+    }
 });
 
 async function main() {
     try {
-        // load the network configuration
+        // Load the network configuration
         const ccpPath = path.resolve(__dirname, '..', '..', 'test-network', 'organizations', 'peerOrganizations', 'org1.example.com', 'connection-org1.json');
         const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
 
-        // Create a new CA client for interacting with the CA.
+        // Create a new CA client for interacting with the CA
         const caURL = ccp.certificateAuthorities['ca.org1.example.com'].url;
         const ca = new FabricCAServices(caURL);
 
-        // Create a new file system based wallet for managing identities.
+        // Create a new file system based wallet for managing identities
         const walletPath = path.join(process.cwd(), 'wallet');
         const wallet = await Wallets.newFileSystemWallet(walletPath);
         console.log(`Wallet path: ${walletPath}`);
 
-        // Check to see if we've already enrolled the user.
-        const userIdentity = await wallet.get(name);
+        // Check if the user is already enrolled
+        const userIdentity = await wallet.get(username);
         if (userIdentity) {
-            console.log(`An identity for the user ${name} already exists in the wallet`);
+            console.log(`An identity for the user ${username} already exists in the wallet`);
             return;
         }
 
-        // Check to see if we've already enrolled the admin user.
+        // Check if the admin is already enrolled
         const adminIdentity = await wallet.get('admin');
         if (!adminIdentity) {
             console.log('An identity for the admin user "admin" does not exist in the wallet');
@@ -51,18 +42,18 @@ async function main() {
             return;
         }
 
-        // build a user object for authenticating with the CA
+        // Authenticate with the CA using the admin identity
         const provider = wallet.getProviderRegistry().getProvider(adminIdentity.type);
         const adminUser = await provider.getUserContext(adminIdentity, 'admin');
 
-        // Register the user, enroll the user, and import the new identity into the wallet.
+        // Register and enroll the user
         const secret = await ca.register({
             affiliation: 'org1.department1',
-            enrollmentID: name,
+            enrollmentID: username,
             role: 'client'
         }, adminUser);
         const enrollment = await ca.enroll({
-            enrollmentID: name,
+            enrollmentID: username,
             enrollmentSecret: secret
         });
         const x509Identity = {
@@ -73,11 +64,11 @@ async function main() {
             mspId: 'Org1MSP',
             type: 'X.509',
         };
-        await wallet.put(name, x509Identity);
-        console.log(`Successfully registered and enrolled admin user ${name} and imported it into the wallet`);
+        await wallet.put(username, x509Identity);
+        console.log(`Successfully registered and enrolled user ${username} and imported it into the wallet`);
 
     } catch (error) {
-        console.error(`Failed to register user ${name}: ${error}`);
+        console.error(`Failed to register user ${username}: ${error}`);
         process.exit(1);
     }
 }

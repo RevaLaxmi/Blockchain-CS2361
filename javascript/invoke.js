@@ -1,85 +1,75 @@
-/*
- * Copyright IBM Corp. All Rights Reserved.
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 'use strict';
 
 const { Gateway, Wallets } = require('fabric-network');
 const fs = require('fs');
 const path = require('path');
 
-let ctx, name, age, contactInfo, gender, illness;
-process.argv.forEach(function (val, index, array) {
-    name = array[2];
-    age = array[3];
-    contactInfo = array[4];
-    gender = array[5];
-    illness = array[6];
-    check= array[7];
-});
-
-//for now we assume that doctors cannot be patients
+//let choice, patientData, patientName, password;
+//process.argv.forEach(function (val, index, array) {
+//    choice = array[2];
+//    switch (choice) {
+//        case 'registerPatient':
+//            patientName = array[3];
+//            patientData = array[4];
+//            password = array[5];
+//            break;
+//        case 'accessPatientRecord':
+//            patientName = array[3];
+//            password = array[4];
+//            break;
+//    }
+//});
 
 async function main() {
+    let choice = process.argv[2];
+    let patientName = process.argv[3]; // Move this line here
+    let patientData = process.argv[4]; // This line as well
+    let password = process.argv[5];    // And this one
+    
     try {
 
-        // load the network configuration
-        const ccpPath = path.resolve(__dirname, '..', '..', 'test-network', 'organizations', 'peerOrganizations', 'org1.example.com', 'connection-org1.json');
-        let ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
-
-        // Create a new file system based wallet for managing identities.
+        // Wallet and gateway setup
         const walletPath = path.join(process.cwd(), 'wallet');
         const wallet = await Wallets.newFileSystemWallet(walletPath);
         console.log(`Wallet path: ${walletPath}`);
 
-        if (check === 'patient') {
-            // Logic to register a patient
-            // For example, you might call a function to register a patient here
-        } 
-        else if (check === 'doctor') {
-            // Logic to register a doctor
-            // For example, you might call a function to register a doctor here
-        } 
-        else {
-            throw new Error('Invalid entity type. Must be either "patient" or "doctor".');
-        }
-
-        // Check to see if we've already enrolled the user.
-        const identity = await wallet.get(patientId);
-        if (!identity) {
-            console.log(`An identity for the user ${patientId} does not exist in the wallet`);
-            console.log('Run the registerUser.js application before retrying');
+        // Checking if identity exists in the wallet
+        const identityExists = await wallet.get(patientName);
+        if (!identityExists) {
+            console.error(`An identity for the name "${patientName}" does not exist in the wallet`);
             return;
         }
 
-        // Create a new gateway for connecting to our peer node.
+        // Load the network configuration
+        const ccpPath = path.resolve(__dirname, '..', '..', 'test-network', 'organizations', 'peerOrganizations', 'org1.example.com', 'connection-org1.json');
+        let ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
+        
+        // Create a new gateway for connecting to the peer node
         const gateway = new Gateway();
-        await gateway.connect(ccp, { wallet, identity: patientId, discovery: { enabled: true, asLocalhost: true } });
+        await gateway.connect(ccp, { wallet, identity: patientName, discovery: { enabled: true, asLocalhost: true } });
 
-        // Get the network (channel) our contract is deployed to.
+        // Get the network (channel) and contract
         const network = await gateway.getNetwork('mychannel');
-
-        // Get the contract from the network.
         const contract = network.getContract('fabchat');
 
-        // Submit the specified transaction.
-        // createCar transaction - requires 5 argument, ex: ('createCar', 'CAR12', 'Honda', 'Accord', 'Black', 'Tom')
-        // changeCarOwner transaction - requires 2 args , ex: ('changeCarOwner', 'CAR12', 'Dave')
-        // await contract.submitTransaction('createCar', 'CAR12', 'Honda', 'Accord', 'Black', 'Tom');
-        if (choice === 'createMsg') {
-            await contract.submitTransaction('createMsg', msg, emailID, isAnonymous);
-            console.log(`${choice} Transaction has been submitted`);
-        } else if (choice === 'flagMsg') {
-            await contract.submitTransaction('flagMsg', msg);
-            console.log(`${choice} Transaction has been submitted`);
-        } else {
-            console.log(`${choice} is invalid!`);
+        // Invoke chaincode functions based on the provided choice
+        switch (choice) {
+            case 'registerPatient':
+                const patientName = process.argv[3];
+                const patientData = process.argv[4];
+                const password = process.argv[5];
+                await contract.submitTransaction('registerPatient', patientName, patientData, password);
+                console.log(`Patient registered: ${patientName}`);
+                break;
+            case 'accessPatientRecord':
+                const patientNameForAccess = process.argv[3];
+                const passwordForAccess = process.argv[4];
+                const retrievedPatientData = await contract.evaluateTransaction('accessPatientRecord', patientNameForAccess, passwordForAccess);
+                console.log(`Patient Data: ${retrievedPatientData.toString()}`);
+                break;
         }
-        console.log('Transaction has been submitted');
 
-        // Disconnect from the gateway.
+        // Disconnect from the gateway
         await gateway.disconnect();
 
     } catch (error) {
